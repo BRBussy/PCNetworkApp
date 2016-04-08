@@ -56,19 +56,21 @@ struct major_appliance_status { //Declare major_appliance_status struct type
 //Server Initialisation Subroutines
 int Create_a_listening_Socket(SOCKET &ListenSocket);
 int Listen_on_ListenSocket_Check_For_Client_Connect(SOCKET & ListenSocket, SOCKET & ClientSocket);
-//Send Receive Subroutines
+
+//Send Receive Protocol Subroutines
 bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket);
 bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket);
-//Functions for Co-ordinating Send Data to Client
 bool Send_Data_to_Client(const SOCKET &ClientSocket, const char *data_to_send);
-//Functions for Co-ordinating Receive Data from Client
 bool Receive_Data_from_Client(const SOCKET &ClientSocket, char *received_data);
-
-
 bool Check_if_new_data_for_client(void);
-//bool Send_Data_to_Client(const SOCKET &ClientSocket, const string &data_for_client);
 
-int Peek_at_Data_from_Client(const SOCKET &ClientSocket);
+//Data Processing Functions
+template <class T> void rebuild_received_data(BYTE *Data_Payload, const int &Num_Bytes_in_Payload, T& rebuilt_variable);
+void process_received_power_measurement(BYTE *Data_Payload, int &no_of_bytes_in_payload);
+void process_received_command(BYTE *Data_Payload, int &no_of_bytes_in_payload);
+void process_received_status(BYTE *Data_Payload, int &no_of_bytes_in_payload);
+
+
 
 int main(void)
 {
@@ -204,7 +206,6 @@ int Create_a_listening_Socket(SOCKET &ListenSocket)
 	freeaddrinfo(ServerInfo); //No Longer Require Sever Address Information
 	return 1;
 }
-
 int Listen_on_ListenSocket_Check_For_Client_Connect(SOCKET &ListenSocket, SOCKET &ClientSocket)
 {
 	int Result;
@@ -245,7 +246,6 @@ bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket)
 	}
 	//Do actual Sending of 1 piece of data.
 }
-
 bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 {
 	char received_data[DEFAULT_BUFLEN];
@@ -333,10 +333,25 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 		cout << "Number of bytes in Payload is: " << no_of_bytes_in_payload << endl;
 		cout << "Data Payload: " << endl <<"|";
 		for (int i = 0; i < no_of_bytes_in_payload; i++) {
-			cout << Data_Payload[i];
+			cout << (int)Data_Payload[i];
 			cout << "|";
 		}
 		cout << endl;
+
+		if (data_ID == "|PR|")
+		{
+			cout << "Passing to Power Measurement Handling Function" << endl;
+			process_received_power_measurement(Data_Payload, no_of_bytes_in_payload);
+		}
+		else if (data_ID == "|CM|")
+		{
+			cout << "Passing to Command Handling Function" << endl;
+		}
+		else if (data_ID == "|ST|")
+		{
+			cout << "Passing to Status Handling Function" << endl;
+		}
+
 	}
 	else 
 	{
@@ -344,17 +359,6 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 	}
 	
 }
-
-//General Rebuiling function prototype
-template <class T> void rebuild_received_data(BYTE *Data_Payload, const int &Num_Bytes_in_Payload, T& rebuilt_variable)
-{
-	BYTE *ptr_to_rebuilt_variable_bytes = (BYTE*)(void*)(&rebuilt_variable);
-	for (int i = 0; i < Num_Bytes_in_Payload; i++) {
-		ptr_to_rebuilt_variable_bytes[i] = Data_Payload[i];
-	}
-}
-
-
 bool Send_Data_to_Client(const SOCKET &ClientSocket, const char *data_to_send)
 {
 	//Notify Client to Wait for Data
@@ -369,66 +373,6 @@ bool Send_Data_to_Client(const SOCKET &ClientSocket, const char *data_to_send)
 		return 1;
 	}
 }
-
-/*bool Send_Data_to_Client(const SOCKET &ClientSocket)
-{
-	scheduling_information firstschedule;
-	cout << "Size is: " << sizeof(firstschedule);
-	firstschedule.hours_on_off[12][2][4] = true;
-	firstschedule.hours_on_off[12][2][5] = false;
-	firstschedule.ID = 4;
-
-	
-	const BYTE *ptr_to_bytes = (const BYTE*)(const void*)(&firstschedule); //Pointer to the bytes memory of data to send
-	BYTE *Data_Payload = NULL;
-	Data_Payload = (BYTE*)realloc(Data_Payload, sizeof(firstschedule)); //get piece of memory which is same num of bytes as data
-	
-	char frame[8943];
-	frame[0] = '|';
-	frame[1] = 'D';
-	frame[2] = '|';
-	frame[3] = '|';
-	frame[4] = 'S';
-	frame[5] = 'I';
-	frame[6] = '|';
-	frame[8939] = '|';
-	frame[8940] = 'E';
-	frame[8941] = 'D';
-	frame[8942] = '|';
-	int i;
-	for (i = 0; i < sizeof(firstschedule); i++)
-	{
-		Data_Payload[i] = ptr_to_bytes[i];
-	}
-	cout << "i went to: " << i;
-	for (int j = 0; j < i; j++) {
-		frame[j + 7] = Data_Payload[j];
-		//frame[j + 7] = 'b';
-	}
-
-	//Notify Client to Wait for Data
-	int iResult = send(ClientSocket, "|D||CM|Receive|ED|", sizeof("|D||CM|Receive|ED|"), 0);
-	if (iResult == SOCKET_ERROR) {//If sending Failed
-		wprintf(L"send failed with error: %d\n", WSAGetLastError());
-		return 0;
-	}
-	else
-	{	//If Sending Succeeded
-		Sleep(100);
-	}
-
-	iResult = send(ClientSocket, frame, sizeof(frame), 0);
-	if (iResult == SOCKET_ERROR) {//If sending Failed
-		wprintf(L"send failed with error: %d\n", WSAGetLastError());
-		return 0;
-	}
-	else
-	{	//If Sending Succeeded
-		Sleep(10);
-		return 1;
-	}
-}*/
-
 bool Receive_Data_from_Client(const SOCKET &ClientSocket, char *received_data)
 {
 	int Result;
@@ -447,33 +391,46 @@ bool Receive_Data_from_Client(const SOCKET &ClientSocket, char *received_data)
 		return 0;
 	}
 }
-
-
-int Peek_at_Data_from_Client(const SOCKET &ClientSocket)
-{
-	char recvbuf[DEFAULT_BUFLEN];
-	int recvbuflen = DEFAULT_BUFLEN;
-	int Result;
-	cout << "I am here";
-	Result = recv(ClientSocket, recvbuf, recvbuflen, MSG_PEEK);
-	cout << "Now I am here";
-	if (Result > 0) {
-		printf("No of Bytes in Buffer: %d\nData is: %s\n", Result, recvbuf);
-	}
-	else if (Result == 0)
-	{
-		printf("Client Disconnected!\n");
-		return 0;
-	}
-	else {
-		printf("Peek failed with error: %d\n", WSAGetLastError());
-		return 0;
-	}
-	return 1;
-}
-
 bool Check_if_new_data_for_client(void)
 {
 	//Perform Some Checks Here and Return 1: if new Data to send. Return 0 if not;
 	return 0;
 }
+
+//Data Processing Functions
+template <class T> void rebuild_received_data(BYTE *Data_Payload, const int &Num_Bytes_in_Payload, T& rebuilt_variable)
+{
+	BYTE *ptr_to_rebuilt_variable_bytes = (BYTE*)(void*)(&rebuilt_variable);
+	for (int i = 0; i < Num_Bytes_in_Payload; i++) {
+		ptr_to_rebuilt_variable_bytes[i] = Data_Payload[i];
+	}
+}
+void process_received_power_measurement(BYTE *Data_Payload, int &no_of_bytes_in_payload)
+{
+	cout << "Processing Received Power Measurement..." << endl;
+	power_measurement first_measurement;
+	rebuild_received_data(Data_Payload, no_of_bytes_in_payload, first_measurement);
+	cout << "Contents of First Measurement: " << endl
+		<< "ID: " << first_measurement.ID << endl
+		<< "Measurement: " << (float)first_measurement.measurement << endl
+		<< "Taken On: " << (int)first_measurement.when_made.year << "/"
+		<< (int)first_measurement.when_made.month << "/"
+		<< (int)first_measurement.when_made.dayOfMonth << " at "
+		<< (int)first_measurement.when_made.hour << ":"
+		<< (int)first_measurement.when_made.minute << ":"
+		<< (int)first_measurement.when_made.second << endl;
+}
+void process_received_command(BYTE *Data_Payload, int &no_of_bytes_in_payload)
+{
+	cout << "Processing received Command" << endl;
+}
+void process_received_status(BYTE *Data_Payload, int &no_of_bytes_in_payload)
+{
+	cout << "Processing received status" << endl;
+}
+
+
+
+
+
+
