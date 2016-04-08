@@ -21,7 +21,7 @@ using namespace std;
 #pragma comment (lib, "Ws2_32.lib")
 // #pragma comment (lib, "Mswsock.lib")
 
-#define DEFAULT_BUFLEN 512
+#define DEFAULT_BUFLEN 64000
 #define DEFAULT_PORT "6950"
 #define LOCAL_HOST "BERNARD_PC"
 
@@ -53,12 +53,21 @@ struct major_appliance_status { //Declare major_appliance_status struct type
 };
 
 //Function Declarations
+//Server Initialisation Subroutines
 int Create_a_listening_Socket(SOCKET &ListenSocket);
 int Listen_on_ListenSocket_Check_For_Client_Connect(SOCKET & ListenSocket, SOCKET & ClientSocket);
+//Send Receive Subroutines
+bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket);
+bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket);
+//Functions for Co-ordinating Send Data to Client
+bool Send_Data_to_Client(const SOCKET &ClientSocket, const char *data_to_send);
+//Functions for Co-ordinating Receive Data from Client
+bool Receive_Data_from_Client(const SOCKET &ClientSocket, char *received_data);
+
+
 bool Check_if_new_data_for_client(void);
 //bool Send_Data_to_Client(const SOCKET &ClientSocket, const string &data_for_client);
-bool Send_Data_to_Client(const SOCKET &ClientSocket);
-bool Receive_Data_from_Client(const SOCKET &ClientSocket);
+
 int Peek_at_Data_from_Client(const SOCKET &ClientSocket);
 
 int main(void)
@@ -95,29 +104,23 @@ int main(void)
 			if (Client_Connected)
 			{//Client Connected? --> YES
 			 //New Data for Client?		 
-			 //Data_to_Send = Check_if_new_data_for_client();
+			 Data_to_Send = Check_if_new_data_for_client();
 
 				if (Data_to_Send) //If there is new Data To Send to 
 				{//New Data for Client? --> YES
-					//Command Client to Wait, New Data is Being Sent
-					Client_Connected = Send_Data_to_Client(ClientSocket);
+					Client_Connected = CoOrdinate_Sending_Data_to_Client(ClientSocket);
 					Sleep(2000);
-					Data_to_Send = false;
 				}
 				else
 				{//New Data for Client? --> NO
 				 //Tell Client to Sent New Data to Server
-					//Client_Connected = Send_Data_to_Client(ClientSocket);
+					//Client_Connected = Send_Data_to_Client(ClientSocket); //Test if Client Still there?
 					if (Client_Connected)
 					{
-						cout << "Want to send receive new Data from Client!" << endl;
-						Client_Connected = Send_Data_to_Client(ClientSocket);
+						Client_Connected = CoOrdinate_Receiving_Data_from_Client(ClientSocket);
 						Sleep(2000);
-						Data_to_Send = true;
-						//Receive_Data_from_Client(ClientSocket);
 					}
 				}
-				
 				//Check if Server Reinitialisation is Necessary
 				if (!Client_Connected)
 				{
@@ -150,6 +153,7 @@ int main(void)
 	WSACleanup();
 	return 0;
 }
+//Server Initialisation Subroutines
 int Create_a_listening_Socket(SOCKET &ListenSocket)
 {
 	struct addrinfo *ServerInfo = NULL; //Pointer to Linked List of of addrinfo Structures
@@ -231,8 +235,51 @@ int Listen_on_ListenSocket_Check_For_Client_Connect(SOCKET &ListenSocket, SOCKET
 	}
 }
 
-//bool Send_Data_to_Client(const SOCKET &ClientSocket, const string &data_for_client)
-bool Send_Data_to_Client(const SOCKET &ClientSocket)
+//Send Receive Protocol Subroutines
+bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket)
+{
+	char data_to_send[] = "Hello_Client";
+	//Command Client to Ready itself to Receive Data
+	if (!Send_Data_to_Client(ClientSocket, "|D||CM|Receive|ED|")) {
+		return 0; //Client not available
+	}
+	//Do actual Sending of 1 piece of data.
+}
+
+bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
+{
+	char received_data[DEFAULT_BUFLEN];
+	//Command Client to Send Data to the Server
+	if (!Send_Data_to_Client(ClientSocket, "|D||CM|Send|ED|")) {
+		return 0; //Client not available
+	}
+	cout << "Wait for client to Send Data" << endl;
+	Receive_Data_from_Client(ClientSocket, received_data);
+	cout << "Some of the Received Data: " << endl;
+	for (int i = 0; i < 20; i++)
+	{
+		cout << received_data[i];
+	}
+	
+}
+
+
+bool Send_Data_to_Client(const SOCKET &ClientSocket, const char *data_to_send)
+{
+	//Notify Client to Wait for Data
+	int iResult = send(ClientSocket, data_to_send, strlen(data_to_send), 0);
+	if (iResult == SOCKET_ERROR) {//If sending Failed
+		wprintf(L"send failed with error: %d\n", WSAGetLastError());
+		return 0;
+	}
+	else
+	{	//If Sending Succeeded
+		Sleep(500);
+		return 1;
+	}
+}
+
+/*bool Send_Data_to_Client(const SOCKET &ClientSocket)
 {
 	scheduling_information firstschedule;
 	cout << "Size is: " << sizeof(firstschedule);
@@ -289,28 +336,27 @@ bool Send_Data_to_Client(const SOCKET &ClientSocket)
 		Sleep(10);
 		return 1;
 	}
-}
+}*/
 
-bool Receive_Data_from_Client(const SOCKET &ClientSocket)
+bool Receive_Data_from_Client(const SOCKET &ClientSocket, char *received_data)
 {
-	char recvbuf[DEFAULT_BUFLEN];
-	int recvbuflen = DEFAULT_BUFLEN;
 	int Result;
-	Result = recv(ClientSocket, recvbuf, recvbuflen, 0);
+
+	Result = recv(ClientSocket, received_data, strlen(received_data), 0);
 	if (Result > 0) {
-		printf("Bytes received: %d\nData: %s\n", Result, recvbuf);
+		return 1; //Receive was a success
 	}
 	else if (Result == 0)
 	{
-		printf("Client Disconnected!\n");
+		printf("Client Disconnected!\n"); //Client seems to have closed the connection
 		return 0;
 	}
 	else {
 		printf("recv failed with error: %d\n", WSAGetLastError());
 		return 0;
 	}
-	return 1;
 }
+
 
 int Peek_at_Data_from_Client(const SOCKET &ClientSocket)
 {
@@ -338,7 +384,7 @@ int Peek_at_Data_from_Client(const SOCKET &ClientSocket)
 bool Check_if_new_data_for_client(void)
 {
 	//Perform Some Checks Here and Return 1: if new Data to send. Return 0 if not;
-	return 1;
+	return 0;
 }
 
 
