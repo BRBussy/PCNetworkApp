@@ -21,7 +21,7 @@ using namespace std;
 #pragma comment (lib, "Ws2_32.lib")
 // #pragma comment (lib, "Mswsock.lib")
 
-#define DEFAULT_BUFLEN 64000
+#define DEFAULT_BUFLEN 10000
 #define DEFAULT_PORT "6950"
 #define LOCAL_HOST "BERNARD_PC"
 
@@ -249,18 +249,109 @@ bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket)
 bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 {
 	char received_data[DEFAULT_BUFLEN];
+	bool Fieldfound = false;
+	int Data_Start_location = 0;
+	int Data_End_Location = 0;
+	int no_of_bytes_in_payload = 0;
+	string data_ID = "";
+	BYTE *Data_Payload = NULL;
+
 	//Command Client to Send Data to the Server
 	if (!Send_Data_to_Client(ClientSocket, "|D||CM|Send|ED|")) {
 		return 0; //Client not available
 	}
 	cout << "Wait for client to Send Data" << endl;
-	Receive_Data_from_Client(ClientSocket, received_data);
-	cout << "Some of the Received Data: " << endl;
-	for (int i = 0; i < 20; i++)
+	Sleep(1500); //Give Client Some Time
+	if (Receive_Data_from_Client(ClientSocket, received_data)) 
 	{
-		cout << received_data[i];
+		//Look for Start of Data Field
+		for (int i = 0; i < (DEFAULT_BUFLEN - 3); i++) 
+		{
+			string DataStartField = "";
+			for (int j = i; j < i + 3; j++) {
+				DataStartField += received_data[j];
+			}
+			if (DataStartField == "|D|") {
+				Fieldfound = true;
+				Data_Start_location = i + 7;
+				//cout << "Data Start Field Found" << endl;
+				break; //Stop Looking since start of Data found
+			}
+		}
+		if (Fieldfound)
+		{
+			//Look For end of Data Field
+			Fieldfound = false;
+			for (int i = 0; i < (DEFAULT_BUFLEN - 4); i++)
+			{
+				string DataEndField = "";
+				for (int j = i; j < i + 4; j++) {
+					DataEndField += received_data[j];
+				}
+				if (DataEndField == "|ED|") {
+					Fieldfound = true;
+					Data_End_Location = i;
+					//cout << "Data End Field Found" << endl;
+					break; //Stop Looking since start of Data found
+				}
+			}
+			if (Fieldfound)
+			{
+				//Extract Data ID Field
+				for (int i = Data_Start_location - 4; i < Data_Start_location; i++)
+				{
+					data_ID += received_data[i];
+				}
+
+			}
+			else
+			{
+				cout << "Invalid Frame Received: No End of Data Found" << endl;
+				return 1;
+			}
+		}
+		else
+		{
+			cout << "Invalid Frame Received: No Start of Data Found" << endl;
+			return 1;
+		}
+
+		no_of_bytes_in_payload = Data_End_Location - Data_Start_location; //Calculate no of bytes
+		Data_Payload = (BYTE*)realloc(Data_Payload, no_of_bytes_in_payload*sizeof(BYTE)); //Create array for bytes
+		
+		//Extract Payload
+		int j = 0;
+		for (int i = Data_Start_location; i < Data_End_Location; i++) {
+			Data_Payload[j] = received_data[i];
+			j++;
+		}
+
+		cout << endl <<"Received Data Stats:" << endl;
+		cout << "data_ID is: " << data_ID << endl;
+		cout << "data start location is: " << Data_Start_location << endl;
+		cout << "data end location is: " << Data_End_Location << endl;
+		cout << "Number of bytes in Payload is: " << no_of_bytes_in_payload << endl;
+		cout << "Data Payload: " << endl <<"|";
+		for (int i = 0; i < no_of_bytes_in_payload; i++) {
+			cout << Data_Payload[i];
+			cout << "|";
+		}
+		cout << endl;
+	}
+	else 
+	{
+		return 0;//Receive Failed Client Disconnected
 	}
 	
+}
+
+//General Rebuiling function prototype
+template <class T> void rebuild_received_data(BYTE *Data_Payload, const int &Num_Bytes_in_Payload, T& rebuilt_variable)
+{
+	BYTE *ptr_to_rebuilt_variable_bytes = (BYTE*)(void*)(&rebuilt_variable);
+	for (int i = 0; i < Num_Bytes_in_Payload; i++) {
+		ptr_to_rebuilt_variable_bytes[i] = Data_Payload[i];
+	}
 }
 
 
@@ -386,15 +477,3 @@ bool Check_if_new_data_for_client(void)
 	//Perform Some Checks Here and Return 1: if new Data to send. Return 0 if not;
 	return 0;
 }
-
-
-//float data_2;
-// BYTE *new_ptr_to_bytes = (BYTE*)(void*)(&data_2);
-//for (int i = 0; i < sizeof(data_2); i++)
-//{
-//	cout << "reconstruction..." << endl;
-//	new_ptr_to_bytes[i] = Data_Payload[i];
-//}
-//cout << "Data_2: " << data_2 << endl;
-//
-//Sleep(500);
