@@ -26,7 +26,6 @@ using namespace std;
 #define LOCAL_HOST "BERNARD_PC"
 
 //Special Data Types
-
 //Scheduling Information Structure
 struct scheduling_information { //Declare scheduling_information struct type
 	int ID; //Device ID
@@ -34,11 +33,12 @@ struct scheduling_information { //Declare scheduling_information struct type
 };
 //Time and Date Structure
 struct time_and_date { //Declare time_and_date struct type
-	int month;
-	int day;
-	int hour;
-	int minute;
-	int second;
+	uint16_t year;
+	uint8_t month;
+	uint8_t dayOfMonth;
+	uint8_t hour;
+	uint8_t minute;
+	uint8_t second;
 };
 //Power Measurement Structure
 struct power_measurement { //Declare power_measurement struct type
@@ -150,7 +150,6 @@ int main(void)
 	WSACleanup();
 	return 0;
 }
-
 int Create_a_listening_Socket(SOCKET &ListenSocket)
 {
 	struct addrinfo *ServerInfo = NULL; //Pointer to Linked List of of addrinfo Structures
