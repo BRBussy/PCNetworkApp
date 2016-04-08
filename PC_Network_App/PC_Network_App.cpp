@@ -121,7 +121,7 @@ int main(void)
 						Sleep(2000);
 					}
 				}
-				//Check if Server Reinitialisation is Necessary
+				//Check if Server Reinsitialisation is Necessary
 				if (!Client_Connected)
 				{
 					Server_Initialised = false;
