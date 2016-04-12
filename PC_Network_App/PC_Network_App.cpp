@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string>
 #include <iostream>
+#include <fstream>
 
 using namespace std;
 //comment
@@ -420,6 +421,10 @@ void process_received_power_measurement(BYTE *Data_Payload, int &no_of_bytes_in_
 		<< (int)first_measurement.when_made.hour << ":"
 		<< (int)first_measurement.when_made.minute << ":"
 		<< (int)first_measurement.when_made.second << endl;
+	ofstream myfile;
+	myfile.open("Command1.txt");
+	myfile << "Hello Bru";
+	myfile.close();
 }
 void process_received_command(BYTE *Data_Payload, int &no_of_bytes_in_payload)
 {
