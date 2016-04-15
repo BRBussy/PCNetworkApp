@@ -15,13 +15,13 @@
 #include <string>
 #include <iostream>
 #include <fstream>
-
+#include <time.h> 
 using namespace std;
-//comment
 
 // Need to link with Ws2_32.lib
 #pragma comment (lib, "Ws2_32.lib")
 // #pragma comment (lib, "Mswsock.lib")
+#pragma warning(disable : 4996)
 
 #define DEFAULT_BUFLEN 10000
 #define DEFAULT_PORT "6950"
@@ -257,6 +257,7 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 	int no_of_bytes_in_payload = 0;
 	string data_ID = "";
 	BYTE *Data_Payload = NULL;
+	string filename;
 
 	//Command Client to Send Data to the Server
 	if (!Send_Data_to_Client(ClientSocket, "|D||CM|Send|ED|")) {
@@ -327,32 +328,77 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 			Data_Payload[j] = received_data[i];
 			j++;
 		}
+		//Get Current time to use as filename
+		time_t rawtime;
+		struct tm * timeinfo;
+		time(&rawtime);
+		string time_now_is = asctime(localtime(&rawtime));
+		for (int i = 0; i < time_now_is.length(); i++) {
+			if (time_now_is[i] == ' ')
+			{
+				time_now_is[i] = '_';
+			}
+			if (time_now_is[i] == ':')
+			{
+				time_now_is[i] = '.';
+			}
+		}
+		
+		//------Save Frame data payload to File------------------------
+		//Create Unique File Name
+		filename = "C:\\Users\\Bernard\\Documents\\Buffer_area\\";
+		filename += time_now_is;
+		if (!filename.empty() && filename[filename.length() - 1] == '\n') {
+			filename.erase(filename.length() - 1);
+		}
+		//Chose Correct file type based on ID field
+		if (data_ID == "|PR|")
+		{
+			filename += ".prdat";
+		}
+		else if (data_ID == "|CM|")
+		{
+			filename += ".cmdat";
+		}
+		else if (data_ID == "|ST|")
+		{
+			filename += ".stdat";
+		}
+		
+		//Save data payload to file
+		ofstream outfile;
+		outfile.open(filename.c_str());
+		//for (int i = Data_Start_location; i < Data_End_Location; i++) {
+		//	outfile << received_data[i];
+		//}
+		power_measurement test_measurement;
+		test_measurement.ID = 5;
+		test_measurement.measurement = 22.5;
+		test_measurement.when_made.dayOfMonth = 4;
+		test_measurement.when_made.hour = 1;
+		test_measurement.when_made.second = 55;
+		test_measurement.when_made.minute = 55;
+		test_measurement.when_made.year = 1994;
+
+		BYTE *ptr_to_test_data_bytes = (BYTE*)(void*)(&test_measurement);
+		for (int i = 0; i < sizeof(test_measurement); i++)
+		{
+			outfile << ptr_to_test_data_bytes[i];
+		}
+		//outfile << endl;
+		outfile.close(); //close the file.
 
 		cout << endl <<"Received Data Stats:" << endl;
 		cout << "data_ID is: " << data_ID << endl;
 		cout << "data start location is: " << Data_Start_location << endl;
 		cout << "data end location is: " << Data_End_Location << endl;
 		cout << "Number of bytes in Payload is: " << no_of_bytes_in_payload << endl;
-		cout << "Data Payload: " << endl <<"|";
+		cout << "Data Payload contents is: " << endl <<"|";
 		for (int i = 0; i < no_of_bytes_in_payload; i++) {
 			cout << (int)Data_Payload[i];
 			cout << "|";
 		}
 		cout << endl;
-
-		if (data_ID == "|PR|")
-		{
-			cout << "Passing to Power Measurement Handling Function" << endl;
-			process_received_power_measurement(Data_Payload, no_of_bytes_in_payload);
-		}
-		else if (data_ID == "|CM|")
-		{
-			cout << "Passing to Command Handling Function" << endl;
-		}
-		else if (data_ID == "|ST|")
-		{
-			cout << "Passing to Status Handling Function" << endl;
-		}
 
 	}
 	else 
@@ -421,10 +467,6 @@ void process_received_power_measurement(BYTE *Data_Payload, int &no_of_bytes_in_
 		<< (int)first_measurement.when_made.hour << ":"
 		<< (int)first_measurement.when_made.minute << ":"
 		<< (int)first_measurement.when_made.second << endl;
-	ofstream myfile;
-	myfile.open("Command1.txt");
-	myfile << "Hello Bru";
-	myfile.close();
 }
 void process_received_command(BYTE *Data_Payload, int &no_of_bytes_in_payload)
 {
