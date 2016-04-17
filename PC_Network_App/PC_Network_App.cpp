@@ -31,7 +31,7 @@ using namespace std;
 //Scheduling Information Structure
 struct scheduling_information { //Declare scheduling_information struct type
 	int ID; //Device ID
-	bool hours_on_off[12][31][24]; //hours_on_off[Months, Days, Hours]
+	bool hours_on_off[7][24][60]; //hours_on_off[Days, Hours, Minutes]
 };
 //Time and Date Structure
 struct time_and_date { //Declare time_and_date struct type
@@ -68,9 +68,9 @@ bool Check_if_new_data_for_client(void);
 
 //Data Processing Functions
 template <class T> void rebuild_received_data(BYTE *Data_Payload, const int &Num_Bytes_in_Payload, T& rebuilt_variable);
-void process_received_power_measurement(BYTE *Data_Payload, int &no_of_bytes_in_payload);
-void process_received_command(BYTE *Data_Payload, int &no_of_bytes_in_payload);
-void process_received_status(BYTE *Data_Payload, int &no_of_bytes_in_payload);
+//void process_received_power_measurement(BYTE *Data_Payload, int &no_of_bytes_in_payload);
+//void process_received_command(BYTE *Data_Payload, int &no_of_bytes_in_payload);
+//void process_received_status(BYTE *Data_Payload, int &no_of_bytes_in_payload);
 
 
 
@@ -113,7 +113,7 @@ int main(void)
 				if (Data_to_Send) //If there is new Data To Send to 
 				{//New Data for Client? --> YES
 					Client_Connected = CoOrdinate_Sending_Data_to_Client(ClientSocket);
-					Sleep(2000);
+					Sleep(500);
 				}
 				else
 				{//New Data for Client? --> NO
@@ -122,7 +122,7 @@ int main(void)
 					if (Client_Connected)
 					{
 						Client_Connected = CoOrdinate_Receiving_Data_from_Client(ClientSocket);
-						Sleep(2000);
+						//Sleep(200);
 					}
 				}
 				//Check if Server Reinsitialisation is Necessary
@@ -241,12 +241,13 @@ int Listen_on_ListenSocket_Check_For_Client_Connect(SOCKET &ListenSocket, SOCKET
 //Send Receive Protocol Subroutines
 bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket)
 {
-	char data_to_send[] = "Hello_Client";
 	//Command Client to Ready itself to Receive Data
 	if (!Send_Data_to_Client(ClientSocket, "|D||CM|Receive|ED|")) {
 		return 0; //Client not available
 	}
+	Sleep(1000);
 	//Do actual Sending of 1 piece of data.
+	return 1;
 }
 bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 {
@@ -264,7 +265,7 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 		return 0; //Client not available
 	}
 	cout << "Wait for client to Send Data" << endl;
-	Sleep(1500); //Give Client Some Time
+	Sleep(100); //Give Client Some Time
 	if (Receive_Data_from_Client(ClientSocket, received_data)) 
 	{
 		//Look for Start of Data Field
@@ -364,14 +365,20 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 		{
 			filename += ".stdat";
 		}
+		else {
+			cout << "Data ID not Recognised, Not Storing Data" << endl;
+			return 1;
+		}
 		
 		//Save data payload to file
 		ofstream outfile;
 		outfile.open(filename.c_str());
-		//for (int i = Data_Start_location; i < Data_End_Location; i++) {
-		//	outfile << received_data[i];
-		//}
-		power_measurement test_measurement;
+		for (int i = Data_Start_location; i < Data_End_Location; i++) {
+			outfile << received_data[i];
+		}
+		
+		//Test Power Reading Store to File
+		/*power_measurement test_measurement;
 		test_measurement.ID = 5;
 		test_measurement.measurement = 22.5;
 		test_measurement.when_made.dayOfMonth = 4;
@@ -385,7 +392,8 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 		{
 			outfile << ptr_to_test_data_bytes[i];
 		}
-		//outfile << endl;
+		//outfile << endl;*/
+
 		outfile.close(); //close the file.
 
 		cout << endl <<"Received Data Stats:" << endl;
@@ -399,7 +407,6 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 			cout << "|";
 		}
 		cout << endl;
-
 	}
 	else 
 	{
@@ -442,6 +449,34 @@ bool Receive_Data_from_Client(const SOCKET &ClientSocket, char *received_data)
 bool Check_if_new_data_for_client(void)
 {
 	//Perform Some Checks Here and Return 1: if new Data to send. Return 0 if not;
+	WIN32_FIND_DATA FindFileData;
+	HANDLE hFind = INVALID_HANDLE_VALUE;
+
+	LARGE_INTEGER filesize;
+	DWORD dwError = 0;
+
+	BYTE *Data_Payload = NULL;
+	int no_of_bytes_in_payload = 0;
+
+	hFind = FindFirstFile("C:\\Users\\Bernard\\Documents\\Buffer_area\\*.SI", &FindFileData);
+	if (INVALID_HANDLE_VALUE == hFind)
+	{
+		cout << "No Scheduling Information in Directory" << endl;
+	}
+	else //There is Scheduling Information
+	{
+		//Iterate Through Directory and process each command frame
+		if (FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		{
+		}
+		else
+		{
+			filesize.LowPart = FindFileData.nFileSizeLow;
+			filesize.HighPart = FindFileData.nFileSizeHigh;
+			cout << FindFileData.cFileName << " bytes " << filesize.QuadPart << endl;
+			return 1;
+		}
+	}
 	return 0;
 }
 
@@ -453,7 +488,10 @@ template <class T> void rebuild_received_data(BYTE *Data_Payload, const int &Num
 		ptr_to_rebuilt_variable_bytes[i] = Data_Payload[i];
 	}
 }
-void process_received_power_measurement(BYTE *Data_Payload, int &no_of_bytes_in_payload)
+
+
+
+/*void process_received_power_measurement(BYTE *Data_Payload, int &no_of_bytes_in_payload)
 {
 	cout << "Processing Received Power Measurement..." << endl;
 	power_measurement first_measurement;
@@ -472,10 +510,10 @@ void process_received_command(BYTE *Data_Payload, int &no_of_bytes_in_payload)
 {
 	cout << "Processing received Command" << endl;
 }
-void process_received_status(BYTE *Data_Payload, int &no_of_bytes_in_payload)
+/*void process_received_status(BYTE *Data_Payload, int &no_of_bytes_in_payload)
 {
 	cout << "Processing received status" << endl;
-}
+}*/
 
 
 
