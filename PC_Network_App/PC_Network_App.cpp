@@ -60,14 +60,15 @@ int Create_a_listening_Socket(SOCKET &ListenSocket);
 int Listen_on_ListenSocket_Check_For_Client_Connect(SOCKET & ListenSocket, SOCKET & ClientSocket);
 
 //Send Receive Protocol Subroutines
-bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket);
+bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket, BYTE *Data_Payload, const int &Num_Bytes_in_Payload);
 bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket);
 bool Send_Data_to_Client(const SOCKET &ClientSocket, const char *data_to_send);
 bool Receive_Data_from_Client(const SOCKET &ClientSocket, char *received_data);
-bool Check_if_new_data_for_client(void);
+BYTE* Check_if_new_data_for_client(int &no_of_bytes_in_payload);
 
 //Data Processing Functions
 template <class T> void rebuild_received_data(BYTE *Data_Payload, const int &Num_Bytes_in_Payload, T& rebuilt_variable);
+BYTE* create_frame_of_data_to_send(const string &full_file_location, const string &ID, const int &no_of_bytes_in_payload);
 //void process_received_power_measurement(BYTE *Data_Payload, int &no_of_bytes_in_payload);
 //void process_received_command(BYTE *Data_Payload, int &no_of_bytes_in_payload);
 //void process_received_status(BYTE *Data_Payload, int &no_of_bytes_in_payload);
@@ -86,6 +87,7 @@ int main(void)
 	bool New_Data_Received = false;
 	bool Server_Initialised = false;
 	string DataForClient = "Hello From Server!";
+	
 	// Initialize Winsock
 	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (iResult != 0) {
@@ -107,12 +109,13 @@ int main(void)
 			//Client Connected?
 			if (Client_Connected)
 			{//Client Connected? --> YES
-			 //New Data for Client?		 
-			 Data_to_Send = Check_if_new_data_for_client();
-
-				if (Data_to_Send) //If there is new Data To Send to 
+			 //New Data for Client?	
+				int no_of_bytes_in_payload;
+				BYTE *Data_Payload = Check_if_new_data_for_client(no_of_bytes_in_payload);
+				
+				if (Data_Payload != NULL) //If there is new Data then Send to Client
 				{//New Data for Client? --> YES
-					Client_Connected = CoOrdinate_Sending_Data_to_Client(ClientSocket);
+					Client_Connected = CoOrdinate_Sending_Data_to_Client(ClientSocket, Data_Payload, no_of_bytes_in_payload);
 					Sleep(500);
 				}
 				else
@@ -239,14 +242,16 @@ int Listen_on_ListenSocket_Check_For_Client_Connect(SOCKET &ListenSocket, SOCKET
 }
 
 //Send Receive Protocol Subroutines
-bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket)
+bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket, BYTE *Data_Payload, const int &Num_Bytes_in_Payload)
 {
 	//Command Client to Ready itself to Receive Data
 	if (!Send_Data_to_Client(ClientSocket, "|D||CM|Receive|ED|")) {
 		return 0; //Client not available
 	}
+
 	Sleep(1000);
-	//Do actual Sending of 1 piece of data.
+
+	
 	return 1;
 }
 bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
@@ -446,38 +451,48 @@ bool Receive_Data_from_Client(const SOCKET &ClientSocket, char *received_data)
 		return 0;
 	}
 }
-bool Check_if_new_data_for_client(void)
+BYTE* Check_if_new_data_for_client(int &no_of_bytes_in_payload)
 {
-	//Perform Some Checks Here and Return 1: if new Data to send. Return 0 if not;
 	WIN32_FIND_DATA FindFileData;
 	HANDLE hFind = INVALID_HANDLE_VALUE;
-
-	LARGE_INTEGER filesize;
-	DWORD dwError = 0;
+    LARGE_INTEGER filesize;
+	//DWORD dwError = 0;
 
 	BYTE *Data_Payload = NULL;
-	int no_of_bytes_in_payload = 0;
+	no_of_bytes_in_payload = 0;
 
-	hFind = FindFirstFile("C:\\Users\\Bernard\\Documents\\Buffer_area\\*.SI", &FindFileData);
+	//Look for New Scheduling Information, i.e. Files of type *.SI
+	hFind = FindFirstFile("C:\\Users\\Bernard\\Documents\\Buffer_area\\Send_to_Client\\*.SI", &FindFileData);
 	if (INVALID_HANDLE_VALUE == hFind)
 	{
 		cout << "No Scheduling Information in Directory" << endl;
 	}
 	else //There is Scheduling Information
 	{
-		//Iterate Through Directory and process each command frame
+		//Iterate Through Directory and process the Scheduling information into a frame to send
 		if (FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
 		{
+			//Only Directories were found, No Files
+			return NULL;
 		}
 		else
 		{
 			filesize.LowPart = FindFileData.nFileSizeLow;
 			filesize.HighPart = FindFileData.nFileSizeHigh;
-			cout << FindFileData.cFileName << " bytes " << filesize.QuadPart << endl;
-			return 1;
+			//cout << FindFileData.cFileName << " bytes " << filesize.QuadPart << endl;
+			string full_file_location = "C:\\Users\\Bernard\\Documents\\Buffer_area\\Send_to_Client\\";
+			full_file_location += FindFileData.cFileName;
+			//cout << "Full Filename is :" << full_file_location << endl;
+			no_of_bytes_in_payload = filesize.QuadPart;
+			Data_Payload = create_frame_of_data_to_send(full_file_location, "SI", no_of_bytes_in_payload);
+			return Data_Payload;
 		}
 	}
-	return 0;
+
+	//Add checks for other file types over here
+
+	//No Files to Be Sent were found of any type
+	return NULL;
 }
 
 //Data Processing Functions
@@ -488,6 +503,47 @@ template <class T> void rebuild_received_data(BYTE *Data_Payload, const int &Num
 		ptr_to_rebuilt_variable_bytes[i] = Data_Payload[i];
 	}
 }
+BYTE* create_frame_of_data_to_send(const string &full_file_location, const string &ID, const int &no_of_bytes_in_payload)
+{
+	cout << "Full File Location is: " << full_file_location << endl;
+	cout << "ID to put on File is: " << ID << endl;
+	cout << "No of Payload Bytes to Send is: " << no_of_bytes_in_payload << endl;
+	cout << "Total No of Bytes to Send is: " << no_of_bytes_in_payload << " + " << strlen("|D||ID||ED|") << " = " << no_of_bytes_in_payload + strlen("|D||ID||ED|") << endl;
+	//Array for Payload only
+	BYTE *Data_Payload = NULL;
+	Data_Payload = (BYTE*)realloc(Data_Payload, no_of_bytes_in_payload*sizeof(BYTE));
+	//Array for Full Frame
+	char *Full_Frame = NULL;
+	Full_Frame = (char*)realloc(Full_Frame, (no_of_bytes_in_payload + strlen("|D||ID||ED|"))*sizeof(char));
+
+	if (Data_Payload != NULL)
+	{
+		//Create Frame Header
+		Full_Frame[0] = '|';
+		Full_Frame[1] = 'D';
+		Full_Frame[2] = '|';
+		Full_Frame[3] = '|';
+		Full_Frame[4] = ID[0];
+		Full_Frame[5] = ID[1];
+		Full_Frame[6] = '|';
+		//Create Frame Footer
+		Full_Frame[no_of_bytes_in_payload + 7] = (BYTE)'|';
+		Full_Frame[no_of_bytes_in_payload + 8] = (BYTE)'E';
+		Full_Frame[no_of_bytes_in_payload + 9] = (BYTE)'D';
+		Full_Frame[no_of_bytes_in_payload + 10] = (BYTE)'|';
+
+		// open a file in read mode and pack bytes into frame.
+		ifstream infile;
+		infile.open(full_file_location.c_str());
+		for (int i = 0; i < no_of_bytes_in_payload; i++) {
+			Data_Payload[i] = infile.get();
+			Full_Frame[i + 7] = Data_Payload[i];
+		}
+		infile.close();
+	}
+	return Data_Payload;
+}
+
 
 
 
