@@ -54,24 +54,28 @@ struct major_appliance_status { //Declare major_appliance_status struct type
 	power_measurement latest_measurement; //Most recent power reading
 };
 
+
 //Function Declarations
 //Server Initialisation Subroutines
 int Create_a_listening_Socket(SOCKET &ListenSocket);
 int Listen_on_ListenSocket_Check_For_Client_Connect(SOCKET & ListenSocket, SOCKET & ClientSocket);
 
 //Send Receive Protocol Subroutines
-bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket, BYTE *Data_Payload, const int &Num_Bytes_in_Payload);
+bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket, char *frame_to_transmit, const int &frame_size);
 bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket);
-bool Send_Data_to_Client(const SOCKET &ClientSocket, const char *data_to_send);
+bool Send_Data_to_Client(const SOCKET &ClientSocket, const char *data_to_send, const int data_to_send_byte_length);
 bool Receive_Data_from_Client(const SOCKET &ClientSocket, char *received_data);
-BYTE* Check_if_new_data_for_client(int &no_of_bytes_in_payload);
+char* Check_if_new_data_for_client(int &frame_size);
 
 //Data Processing Functions
 template <class T> void rebuild_received_data(BYTE *Data_Payload, const int &Num_Bytes_in_Payload, T& rebuilt_variable);
-BYTE* create_frame_of_data_to_send(const string &full_file_location, const string &ID, const int &no_of_bytes_in_payload);
+char* create_frame_of_data_to_send(const string &full_file_location, const string &ID, const int &no_of_bytes_in_payload, int &frame_size);
+string check_ID(const char *Frame_to_test, const int &frame_size);
+char* create_schedule_part_to_send(const char *frame_to_transmit, const int schedule_part_to_send);
 //void process_received_power_measurement(BYTE *Data_Payload, int &no_of_bytes_in_payload);
 //void process_received_command(BYTE *Data_Payload, int &no_of_bytes_in_payload);
 //void process_received_status(BYTE *Data_Payload, int &no_of_bytes_in_payload);
+
 
 
 
@@ -110,12 +114,12 @@ int main(void)
 			if (Client_Connected)
 			{//Client Connected? --> YES
 			 //New Data for Client?	
-				int no_of_bytes_in_payload;
-				BYTE *Data_Payload = Check_if_new_data_for_client(no_of_bytes_in_payload);
+				int frame_size;
+				char *frame_to_transmit = Check_if_new_data_for_client(frame_size);
 				
-				if (Data_Payload != NULL) //If there is new Data then Send to Client
+				if (frame_to_transmit != NULL) //If there is new Data then Send to Client
 				{//New Data for Client? --> YES
-					Client_Connected = CoOrdinate_Sending_Data_to_Client(ClientSocket, Data_Payload, no_of_bytes_in_payload);
+					Client_Connected = CoOrdinate_Sending_Data_to_Client(ClientSocket, frame_to_transmit, frame_size);
 					Sleep(500);
 				}
 				else
@@ -242,14 +246,51 @@ int Listen_on_ListenSocket_Check_For_Client_Connect(SOCKET &ListenSocket, SOCKET
 }
 
 //Send Receive Protocol Subroutines
-bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket, BYTE *Data_Payload, const int &Num_Bytes_in_Payload)
+bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket, char *frame_to_transmit, const int &frame_size)
 {
 	//Command Client to Ready itself to Receive Data
-	if (!Send_Data_to_Client(ClientSocket, "|D||CM|Receive|ED|")) {
+	if (!Send_Data_to_Client(ClientSocket, "|D||CM|Receive|ED|",strlen("|D||CM|Receive|ED|"))) 
+	{
 		return 0; //Client not available
 	}
-
-	Sleep(1000);
+	cout << "Frame Size is " << frame_size << endl;
+	
+	Sleep(200);
+	
+	//Check what type of information is being sent
+	if (check_ID(frame_to_transmit, frame_size) == "|SI|") //Scheduling information being sent
+	{
+		cout << endl << "Scheduling Data is Getting Sent bit by bit!" << endl;
+		for (int i = 0; i <= 3; i++) {	
+					if (i == 0) {
+				if (!Send_Data_to_Client(ClientSocket, create_schedule_part_to_send(frame_to_transmit,i), 2536))
+				{
+					return 0; //Client not available
+				}
+				Sleep(1000);
+			}
+			else {
+				//Command Client to Ready itself to Receive Data
+				if (!Send_Data_to_Client(ClientSocket, "|D||CM|Receive|ED|", strlen("|D||CM|Receive|ED|")))
+				{
+					return 0; //Client not available
+				}
+				Sleep(200);
+				if (!Send_Data_to_Client(ClientSocket, create_schedule_part_to_send(frame_to_transmit, i), 2536))
+				{
+					return 0; //Client not available
+				}
+				Sleep(1000);
+			}
+		}
+	}
+	else //Some other kind of information being sent
+	{
+		if (!Send_Data_to_Client(ClientSocket, frame_to_transmit, frame_size))
+		{
+			return 0; //Client not available
+		}
+	}
 
 	
 	return 1;
@@ -266,7 +307,7 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 	string filename;
 
 	//Command Client to Send Data to the Server
-	if (!Send_Data_to_Client(ClientSocket, "|D||CM|Send|ED|")) {
+	if (!Send_Data_to_Client(ClientSocket, "|D||CM|Send|ED|", strlen("|D||CM|Send|ED|"))) {
 		return 0; //Client not available
 	}
 	cout << "Wait for client to Send Data" << endl;
@@ -419,10 +460,10 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 	}
 	
 }
-bool Send_Data_to_Client(const SOCKET &ClientSocket, const char *data_to_send)
+bool Send_Data_to_Client(const SOCKET &ClientSocket, const char *data_to_send, const int data_to_send_byte_length)
 {
 	//Notify Client to Wait for Data
-	int iResult = send(ClientSocket, data_to_send, strlen(data_to_send), 0);
+	int iResult = send(ClientSocket, data_to_send, data_to_send_byte_length, 0);
 	if (iResult == SOCKET_ERROR) {//If sending Failed
 		wprintf(L"send failed with error: %d\n", WSAGetLastError());
 		return 0;
@@ -451,15 +492,16 @@ bool Receive_Data_from_Client(const SOCKET &ClientSocket, char *received_data)
 		return 0;
 	}
 }
-BYTE* Check_if_new_data_for_client(int &no_of_bytes_in_payload)
+
+char* Check_if_new_data_for_client(int &frame_size)
 {
 	WIN32_FIND_DATA FindFileData;
 	HANDLE hFind = INVALID_HANDLE_VALUE;
     LARGE_INTEGER filesize;
 	//DWORD dwError = 0;
 
-	BYTE *Data_Payload = NULL;
-	no_of_bytes_in_payload = 0;
+	char *frame_to_transmit = NULL;
+	int no_of_bytes_in_payload = 0;
 
 	//Look for New Scheduling Information, i.e. Files of type *.SI
 	hFind = FindFirstFile("C:\\Users\\Bernard\\Documents\\Buffer_area\\Send_to_Client\\*.SI", &FindFileData);
@@ -484,8 +526,8 @@ BYTE* Check_if_new_data_for_client(int &no_of_bytes_in_payload)
 			full_file_location += FindFileData.cFileName;
 			//cout << "Full Filename is :" << full_file_location << endl;
 			no_of_bytes_in_payload = filesize.QuadPart;
-			Data_Payload = create_frame_of_data_to_send(full_file_location, "SI", no_of_bytes_in_payload);
-			return Data_Payload;
+			frame_to_transmit = create_frame_of_data_to_send(full_file_location, "SI", no_of_bytes_in_payload, frame_size);
+			return frame_to_transmit;
 		}
 	}
 
@@ -503,45 +545,123 @@ template <class T> void rebuild_received_data(BYTE *Data_Payload, const int &Num
 		ptr_to_rebuilt_variable_bytes[i] = Data_Payload[i];
 	}
 }
-BYTE* create_frame_of_data_to_send(const string &full_file_location, const string &ID, const int &no_of_bytes_in_payload)
+char* create_frame_of_data_to_send(const string &full_file_location, const string &ID, const int &no_of_bytes_in_payload, int &frame_size)
 {
 	cout << "Full File Location is: " << full_file_location << endl;
 	cout << "ID to put on File is: " << ID << endl;
 	cout << "No of Payload Bytes to Send is: " << no_of_bytes_in_payload << endl;
 	cout << "Total No of Bytes to Send is: " << no_of_bytes_in_payload << " + " << strlen("|D||ID||ED|") << " = " << no_of_bytes_in_payload + strlen("|D||ID||ED|") << endl;
+	
 	//Array for Payload only
 	BYTE *Data_Payload = NULL;
 	Data_Payload = (BYTE*)realloc(Data_Payload, no_of_bytes_in_payload*sizeof(BYTE));
+	
 	//Array for Full Frame
-	char *Full_Frame = NULL;
-	Full_Frame = (char*)realloc(Full_Frame, (no_of_bytes_in_payload + strlen("|D||ID||ED|"))*sizeof(char));
+	char *frame_to_transmit = NULL;
+	frame_size = no_of_bytes_in_payload + strlen("|D||ID||ED|");
+	frame_to_transmit = (char*)realloc(frame_to_transmit, frame_size*sizeof(char));
 
 	if (Data_Payload != NULL)
 	{
 		//Create Frame Header
-		Full_Frame[0] = '|';
-		Full_Frame[1] = 'D';
-		Full_Frame[2] = '|';
-		Full_Frame[3] = '|';
-		Full_Frame[4] = ID[0];
-		Full_Frame[5] = ID[1];
-		Full_Frame[6] = '|';
+		frame_to_transmit[0] = '|';
+		frame_to_transmit[1] = 'D';
+		frame_to_transmit[2] = '|';
+		frame_to_transmit[3] = '|';
+		frame_to_transmit[4] = ID[0];
+		frame_to_transmit[5] = ID[1];
+		frame_to_transmit[6] = '|';
 		//Create Frame Footer
-		Full_Frame[no_of_bytes_in_payload + 7] = (BYTE)'|';
-		Full_Frame[no_of_bytes_in_payload + 8] = (BYTE)'E';
-		Full_Frame[no_of_bytes_in_payload + 9] = (BYTE)'D';
-		Full_Frame[no_of_bytes_in_payload + 10] = (BYTE)'|';
+		frame_to_transmit[no_of_bytes_in_payload + 7] = (BYTE)'|';
+		frame_to_transmit[no_of_bytes_in_payload + 8] = (BYTE)'E';
+		frame_to_transmit[no_of_bytes_in_payload + 9] = (BYTE)'D';
+		frame_to_transmit[no_of_bytes_in_payload + 10] = (BYTE)'|';
 
 		// open a file in read mode and pack bytes into frame.
 		ifstream infile;
 		infile.open(full_file_location.c_str());
 		for (int i = 0; i < no_of_bytes_in_payload; i++) {
 			Data_Payload[i] = infile.get();
-			Full_Frame[i + 7] = Data_Payload[i];
+			frame_to_transmit[i + 7] = Data_Payload[i];
 		}
 		infile.close();
 	}
-	return Data_Payload;
+	return frame_to_transmit;
+}
+
+string check_ID(const char *Frame_to_test, const int &frame_size)
+{
+	string ID = "";
+	if (frame_size >= 13)
+	{
+		for (int i = 3; i <= 6; i++) {
+			ID += Frame_to_test[i];
+		}
+	}
+	else {
+		return "NA";
+	}
+	return ID;
+}
+
+char* create_schedule_part_to_send(const char *frame_to_transmit, const int schedule_part_to_send)
+{
+	char *part_to_send = NULL;
+	part_to_send = (char*)realloc(part_to_send, 2536*sizeof(char));
+	
+	if (part_to_send != NULL) {
+		switch (schedule_part_to_send) {
+		case 0: {
+			part_to_send[9] = '0';
+			for (int i = 11; i <= 2531; i++) {
+				part_to_send[i] = frame_to_transmit[i - 4];
+			}
+			break;}
+		case 1: {
+			part_to_send[9] = '1';
+			for (int i = 11; i <= 2531; i++) {
+				part_to_send[i] = frame_to_transmit[i + 2517];
+			}
+			break;}
+		case 2: {
+			part_to_send[9] = '2';
+			for (int i = 11; i <= 2531; i++) {
+				part_to_send[i] = frame_to_transmit[i + 5038];
+			}
+			break;}
+		case 3: {
+			part_to_send[9] = '3';
+			for (int i = 11; i <= 2531; i++) {
+				part_to_send[i] = frame_to_transmit[i + 7559];
+			}
+			break;}
+		}
+
+		//Create Header
+		part_to_send[0] = '|';
+		part_to_send[1] = 'D';
+		part_to_send[2] = '|';
+		part_to_send[3] = '|';
+		part_to_send[4] = 'S';
+		part_to_send[5] = 'I';
+		part_to_send[6] = '|';
+
+		//Scheduling Header
+		part_to_send[7] = '|';
+		part_to_send[8] = 'P';
+		part_to_send[10] = '|';
+
+		//Create footer
+		part_to_send[2532] = '|';
+		part_to_send[2533] = 'E';
+		part_to_send[2534] = 'D';
+		part_to_send[2535] = '|';
+	}
+	else {
+		cout << "Memory Not Available!!" << endl;
+	}
+
+	return part_to_send;
 }
 
 
