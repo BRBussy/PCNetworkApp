@@ -246,10 +246,13 @@ bool CoOrdinate_Sending_Data_to_Client(const SOCKET &ClientSocket, char *frame_t
 	{
 		return 0; //Client not available
 	}
-	
 	Sleep(200);
+	if (!Send_Data_to_Client(ClientSocket, frame_to_transmit, frame_size))
+	{
+		return 0; //Client not available
+	}
 	
-	return 1;
+	return 1; //Client was available
 }
 bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 {
