@@ -72,6 +72,7 @@ template <class T> void rebuild_received_data(BYTE *Data_Payload, const int &Num
 char* create_frame_of_data_to_send(const string &full_file_location, const string &ID, const int &no_of_bytes_in_payload, int &frame_size);
 string check_ID(const char *Frame_to_test, const int &frame_size);
 
+
 int main(void)
 {
 	//Variable Declaration
@@ -466,7 +467,7 @@ char* Check_if_new_data_for_client(int &frame_size)
 	hFind = FindFirstFile("C:\\Users\\Bernard\\Documents\\Buffer_area\\Send_to_Client\\*.SI", &FindFileData);
 	if (INVALID_HANDLE_VALUE == hFind)
 	{
-		cout << "No Scheduling Information in Directory" << endl;
+		cout << endl << "No Scheduling Information in Directory" << endl;
 	}
 	else //There is Scheduling Information
 	{
@@ -490,6 +491,36 @@ char* Check_if_new_data_for_client(int &frame_size)
 			else
 				cout << "File successfully deleted" << endl;
 
+			return frame_to_transmit;
+		}
+	}
+	
+	//Look for Current_Operating Mode, i.e. Files of type *.SI
+	hFind = FindFirstFile("C:\\Users\\Bernard\\Documents\\Buffer_area\\Send_to_Client\\Operating_Mode.CM", &FindFileData);
+	if (INVALID_HANDLE_VALUE == hFind)
+	{
+		cout << "Operating_Mode does not exist in Directory" << endl;
+	}
+	else //There is Current_Operating Mode
+	{
+		//Iterate Through Directory and process the Current_Operating Mode into a frame to send
+		if (FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		{
+			//Only Directories were found, No Files
+			return NULL;
+		}
+		else
+		{
+			filesize.LowPart = FindFileData.nFileSizeLow;
+			filesize.HighPart = FindFileData.nFileSizeHigh;
+			string full_file_location = "C:\\Users\\Bernard\\Documents\\Buffer_area\\Send_to_Client\\Operating_Mode.CM";
+			no_of_bytes_in_payload = filesize.QuadPart;
+			frame_to_transmit = create_frame_of_data_to_send(full_file_location, "CM", no_of_bytes_in_payload, frame_size);
+			
+			if (remove(full_file_location.c_str()))
+				cout << "Error deleting file" << endl;
+			else
+				cout << "File successfully deleted" << endl;
 			return frame_to_transmit;
 		}
 	}
@@ -564,6 +595,7 @@ string check_ID(const char *Frame_to_test, const int &frame_size)
 	}
 	return ID;
 }
+
 
 
 
