@@ -469,6 +469,8 @@ char* Check_if_new_data_for_client(int &frame_size)
 	char *frame_to_transmit = NULL;
 	int no_of_bytes_in_payload = 0;
 
+	//Check if we need to send Time Data
+
 	//Look for New Scheduling Information, i.e. Files of type *.SI
 	hFind = FindFirstFile("C:\\Users\\Bernard\\Documents\\Buffer_area\\Send_to_Client\\*.SI", &FindFileData);
 	if (INVALID_HANDLE_VALUE == hFind)
