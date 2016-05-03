@@ -71,6 +71,7 @@ char* Check_if_new_data_for_client(int &frame_size);
 template <class T> void rebuild_received_data(BYTE *Data_Payload, const int &Num_Bytes_in_Payload, T& rebuilt_variable);
 char* create_frame_of_data_to_send(const string &full_file_location, const string &ID, const int &no_of_bytes_in_payload, int &frame_size);
 string check_ID(const char *Frame_to_test, const int &frame_size);
+void process_received_command(const char *received_data, const int &Data_Start_location, const int &Data_End_Location);
 
 
 int main(void)
@@ -352,6 +353,19 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 			}
 		}
 		
+		//Details of Received Data
+		cout << endl << "Received Data Stats:" << endl;
+		cout << "data_ID is: " << data_ID << endl;
+		cout << "data start location is: " << Data_Start_location << endl;
+		cout << "data end location is: " << Data_End_Location << endl;
+		cout << "Number of bytes in Payload is: " << no_of_bytes_in_payload << endl;
+		cout << "Data Payload contents is: " << endl << "|";
+		for (int i = 0; i < no_of_bytes_in_payload; i++) {
+			cout << (int)Data_Payload[i];
+			cout << "|";
+		}
+		cout << endl;
+		
 		//------Save Frame data payload to File------------------------
 		//Create Unique File Name
 		filename = "C:\\Users\\Bernard\\Documents\\Buffer_area\\";
@@ -366,7 +380,9 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 		}
 		else if (data_ID == "|CM|")
 		{
-			filename += ".cmdat";
+			cout << "Passing to Command Processsing Function" << endl;
+			process_received_command(received_data, Data_Start_location, Data_End_Location);
+			return 1;
 		}
 		else if (data_ID == "|ST|")
 		{
@@ -403,17 +419,7 @@ bool CoOrdinate_Receiving_Data_from_Client(const SOCKET &ClientSocket)
 
 		outfile.close(); //close the file.
 
-		cout << endl <<"Received Data Stats:" << endl;
-		cout << "data_ID is: " << data_ID << endl;
-		cout << "data start location is: " << Data_Start_location << endl;
-		cout << "data end location is: " << Data_End_Location << endl;
-		cout << "Number of bytes in Payload is: " << no_of_bytes_in_payload << endl;
-		cout << "Data Payload contents is: " << endl <<"|";
-		for (int i = 0; i < no_of_bytes_in_payload; i++) {
-			cout << (int)Data_Payload[i];
-			cout << "|";
-		}
-		cout << endl;
+
 	}
 	else 
 	{
@@ -596,7 +602,19 @@ string check_ID(const char *Frame_to_test, const int &frame_size)
 	return ID;
 }
 
+void process_received_command(const char *received_data, const int &Data_Start_location, const int &Data_End_Location)
+{
+	string command;
+	for (int i = Data_Start_location; i < Data_End_Location; i++) {
+		command += (char)received_data[i];
+	}
+	cout << endl << "Command to Process is: " << command <<endl;
 
+	if (command == "No_New_Data")
+	{
+		cout << "Client Says that they have No New Data to Send to Server" << endl;
+	}
+}
 
 
 
