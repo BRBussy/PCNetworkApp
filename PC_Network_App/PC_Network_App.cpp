@@ -119,6 +119,7 @@ int main(void)
 				{//New Data for Client? --> NO
 				 //Tell Client to Sent New Data to Server
 					//Client_Connected = Send_Data_to_Client(ClientSocket); //Test if Client Still there?
+					cout << endl << "No New Data for Client...asking client to send data." << endl;
 					if (Client_Connected)
 					{
 						Client_Connected = CoOrdinate_Receiving_Data_from_Client(ClientSocket);
@@ -483,6 +484,12 @@ char* Check_if_new_data_for_client(int &frame_size)
 			full_file_location += FindFileData.cFileName;
 			no_of_bytes_in_payload = filesize.QuadPart;
 			frame_to_transmit = create_frame_of_data_to_send(full_file_location, "SI", no_of_bytes_in_payload, frame_size);
+
+			if (remove(full_file_location.c_str()))
+				cout << "Error deleting file" << endl;
+			else
+				cout << "File successfully deleted" << endl;
+
 			return frame_to_transmit;
 		}
 	}
